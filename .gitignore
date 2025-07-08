@@ -1,0 +1,11 @@
+# Ignore virtual environments
+venv/
+__pycache__/
+
+# Ignore Parquet and CSV outputs
+*.parquet
+data/splits/
+output/
+
+# OS files
+.DS_Store
