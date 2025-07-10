@@ -28,12 +28,13 @@ def main():
     csv_files = glob.glob(os.path.join(INPUT_DIR, "*.csv"))
     if not csv_files:
         return
+    
 
-    with ProcessPoolExecutor() as executor:
+    with ProcessPoolExecutor(max_workers = 8) as executor:
         list(executor.map(convert_csv_to_parquet, csv_files))
 
     end = time.time()
-    print(f"✅ Done in {end - start:.2f} seconds.")
+    print(f"Done in {end - start:.2f} seconds.")
 
 if __name__ == "__main__":
     main()

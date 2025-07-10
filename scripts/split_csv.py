@@ -3,7 +3,7 @@ import os
 
 INPUT_FILE = "data/Border_Crossing_Entry_Data.csv"  # your big CSV
 OUTPUT_DIR = "data/splits"
-CHUNK_SIZE = 100000  # rows per file
+CHUNK_SIZE = 20000  # rows per file
 
 def split_csv():
     if not os.path.exists(INPUT_FILE):
