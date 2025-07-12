@@ -1,60 +1,64 @@
-from pyspark.sql import SparkSession
 import os
 import time
+import argparse
+from pyspark.sql import SparkSession
 
-print("🧭 JAVA_HOME =", os.environ.get("JAVA_HOME"))
-print("📂 Current working dir =", os.getcwd())
-print("📄 Listing input dir...")
-print(os.listdir("data"))  # Adjust if your folder isn't named input
+def parse_args():
+    parser = argparse.ArgumentParser(description="Convert CSV to Parquet/JSON/ORC using PySpark.")
+    parser.add_argument("--input", type=str, help="Input CSV file path")
+    parser.add_argument("--output", type=str, default="output_spark", help="Output directory")
+    parser.add_argument("--format", type=str, default="parquet", choices=["parquet", "json", "orc"], help="Output format")
+    parser.add_argument("--infer-schema", type=str, default="false", help="Whether to infer schema (true/false)")
+    parser.add_argument("--repartition", type=int, help="Optional number of output partitions")
+    return parser.parse_args()
+
+def find_first_csv(directory="data"):
+    files = os.listdir(directory)
+    for f in files:
+        if f.endswith(".csv"):
+            return os.path.join(directory, f)
+    return None
 
 def main():
-    total_start = time.time()
+    args = parse_args()
 
-    print("🟢 Starting Spark session...")
-    spark = SparkSession.builder \
-        .appName("CSV to Parquet Converter") \
-        .getOrCreate()
-    print("✅ Spark session created.")
+    input_path = args.input or find_first_csv()
+    output_dir = args.output
+    output_format = args.format
+    infer_schema = args.infer_schema.lower() == "true"
+    repartition = args.repartition
 
-    input_path = "data/Border_Crossing_Entry_Data.csv"
-    output_dir = "output_spark"
-
-    # Check path
-    if not os.path.exists(input_path):
-        print(f"❌ File does not exist: {input_path}")
-        return
-    print(f"📁 Found input file: {input_path}")
-
-    # Read CSV
-    try:
-        read_start = time.time()
-        df = spark.read.option("header", "true").csv(input_path)
-        row_count = df.count()
-        read_time = time.time() - read_start
-        print(f"📊 DataFrame read: {row_count} rows in {read_time:.2f} seconds")
-        
-    except Exception as e:
-        print(f"❌ Failed to read CSV: {e}")
+    if not input_path or not os.path.exists(input_path):
+        print(f"input file not found: {input_path}")
         return
 
-    # Ensure output dir exists
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "data.parquet")
+    output_filename = os.path.splitext(os.path.basename(input_path))[0] + f".{output_format}"
+    output_path = os.path.join(output_dir, output_filename)
 
-    # Write Parquet
+    print(f"reading from: {input_path}")
+    print(f"writing to: {output_path}")
+    print(f"format: {output_format}, infer_schema: {infer_schema}, repartition: {repartition or 'default'}")
+
+    spark = SparkSession.builder.appName("CSV Converter").getOrCreate()
+
     try:
-        write_start = time.time()
-        df.write.mode("overwrite").parquet(output_path)
-        write_time = time.time() - write_start
-        print(f"✅ Successfully wrote to {output_path} in {write_time:.2f} seconds")
-    except Exception as e:
-        print(f"❌ Failed to write Parquet: {e}")
-        return
+        start_time = time.time()
+        df = spark.read.option("header", "true").option("inferSchema", str(infer_schema).lower()).csv(input_path)
+        row_count = df.count()
+        print(f"rows: {row_count}")
+        df.printSchema()
 
-    spark.stop()
-    total_time = time.time() - total_start
-    print("🔴 Spark session stopped.")
-    print(f"⏱️ Total time elapsed: {total_time:.2f} seconds")
+        if repartition:
+            df = df.repartition(repartition)
+
+        df.write.mode("overwrite").format(output_format).save(output_path)
+        elapsed = time.time() - start_time
+        print(f"done in {elapsed:.2f} seconds")
+    except Exception as e:
+        print(f"error: {e}")
+    finally:
+        spark.stop()
 
 if __name__ == "__main__":
     main()
